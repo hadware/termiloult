@@ -81,9 +81,11 @@ class AWavPlayer:
         if not self._worker_wakeup.is_set():
             self._worker_wakeup.wait()
 
+        # number of bytes required by PortAudio to be returned by the callback
         expected_size = frame_count * self.sample_width
         actual_size = 0
 
+        # unqueueing chunks of frames from the queue until it's >= expected_size
         chunks = list()
         while actual_size < expected_size:
             try:
@@ -98,12 +100,15 @@ class AWavPlayer:
             chunks.append(chunk)
             actual_size += len(chunk)
 
+        # converting list of bytes to a sigle byte object, and requeuing occasional "extra bytes"
         data = b''.join(chunks)
+        # making the data fit correctly the expected_size window
         if actual_size > expected_size:
             self._queue.appendleft(data[expected_size:])
             data = data[:expected_size]
         else:
             # portaudio will stop working if the data we send back is too short
+            # thus, we add some padding at the end to make it "fit" the expected size
             data = data.ljust(expected_size, b'\x00')
 
         return data, paContinue
