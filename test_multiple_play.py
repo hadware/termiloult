@@ -1,7 +1,6 @@
 from asyncio import get_event_loop, ensure_future, sleep
 from collections import deque
 from threading import Event
-from time import sleep as sync_sleep
 import logging
 import wave
 
