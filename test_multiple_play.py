@@ -16,9 +16,9 @@ class AWavPlayer:
     sample_width = 0
     # a queue to communicate between the main thread and the worker's thread
     _queue = None
-    # will next call the worker stop?
+    # will the worker stop on its next call?
     _stop_next = False
-    # future signaling end of play
+    # future signaling end of playback
     _done = None
     # duration of a chunk of sound in seconds
     chunk_duration = 0.2
@@ -41,23 +41,22 @@ class AWavPlayer:
     def _worker(self, in_data, frame_count, time_info, status):
         """ Function called by PyAudio each time it can play more sound
 
-        It stops once it reaches an empty array of bytes in its queue.
-        If it doesn't, it blocks its thread until another one sets
-        #_worker_wakeup.
-
         Caution, this callback is running into a separate thread!
+        It stops once it reaches an empty array of bytes in its queue.
+        If it doesn't, it blocks until another one sets #_worker_wakeup.
+
         This is why, when the queue of chunks is empty we are using
         a synchronisation primitive to wake it up. It's *not* running
-        in asyncio's event loop, and as such to interact with it it needs
-        to use AbstractEventLoop.call_soon_threadsafe.
+        in asyncio's event loop, and as such to interact with it you need
+        to use AbstractEventLoop#call_soon_threadsafe.
 
-        Since it *has* to be fast else there will be small interuptions during
-        playback, which is quite unpleasant and can go as far as making any
-        sound impossible to identify. Therefore several tricks had to be used
-        to make it fast enough:
+        This function *has* to be fast else there will be small interuptions
+        during playback, which is quite unpleasant and can go as far as making
+        any sound impossible to identify. Therefore several tricks had to be
+        used in order to make it fast enough:
 
             - use thread-related functions as scarcely as possible since they
-              have a really high cpu-time cost
+              have a really high cost
             - use a deque to communicate between threads, since its append/pop
               operations are atomic and thus don't need locking
             - make this worker able to cope with arbitrary-sized chunks sent
@@ -66,8 +65,8 @@ class AWavPlayer:
             - don't use bytes concatenation as it's really slow; instead, put
               chunks into a list and join it once it's at least as long as
               requested by the `frame_count` parameter. Since deque is as
-              performant for right append as for left appends, we can put
-              again any leftover back into it.
+              performant for right append as for left append, we can put
+              any leftover back into it.
             - use additions to keep track of the sum of the length
               of each chunk in the list of chuncks, which is really fast
             - check that the Event is set before waiting for it as waiting
@@ -127,7 +126,7 @@ class AWavPlayer:
         return await self._done
 
     async def aplay_file(self, fd):
-        """ Play a file or a file-like object asynchronously
+        """ Plays a file or a file-like object asynchronously
 
         This will block while reading the file unless you pass a file-like
         object already in memory.
@@ -156,7 +155,7 @@ class AWavPlayer:
             self._worker_wakeup.set()
             # Instead of just waiting, mixing of incoming messages
             # could happend here. It is necessary to do the mixing
-            # in the application else the OS's sound systemd will have
+            # in the application else the OS' sound system will have
             # to take care of many short-lived audio sources, which
             # makes CPU usage go up, sometimes a lot. I guess numpy should
             # be performant enough to handle that?
