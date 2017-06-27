@@ -1,6 +1,7 @@
 from asyncio import get_event_loop, ensure_future, sleep
 from collections import deque
 from threading import Event
+from time import sleep as sync_sleep
 import logging
 import wave
 
@@ -17,12 +18,8 @@ class AWavPlayer:
     _queue = None
     # will next call the worker stop?
     _stop_next = False
-    # will next call the worker wait for chunks?
-    _block_next = False
     # future signaling end of play
     _done = None
-    # is the worker waiting for chunks?
-    _worker_blocked = False
     # duration of a chunk of sound in seconds
     chunk_duration = 0.2
     # synchronisation primitive to resume the worker's activity
@@ -73,6 +70,9 @@ class AWavPlayer:
               again any leftover back into it.
             - use additions to keep track of the sum of the length
               of each chunk in the list of chuncks, which is really fast
+            - check that the Event is set before waiting for it as waiting
+              implies acquiring a lock, which is a big slowdown, while
+              checking Event#is_set simply returns the value of a boolean
         """
 
         if self._stop_next:
@@ -80,11 +80,8 @@ class AWavPlayer:
             self.loop.call_soon_threadsafe(self._done.set_result, None)
             return b'', paComplete
 
-        if self._block_next:
-            self._block_next = False
-            self.loop.call_soon_threadsafe(self._signal_worker_block)
+        if not self._worker_wakeup.is_set():
             self._worker_wakeup.wait()
-            self._worker_wakeup.clear()
 
         expected_size = frame_count * self.sample_width
         actual_size = 0
@@ -94,8 +91,8 @@ class AWavPlayer:
             try:
                 chunk = self._queue.popleft()
             except IndexError:
-                self.logger.debug('Queue empty; worker will block next call')
-                self._block_next = True
+                self.logger.debug('Worker\'s queue is empty')
+                self._worker_wakeup.clear()
                 break
             if not chunk:
                 self._stop_next = True
@@ -112,14 +109,6 @@ class AWavPlayer:
             data = data.ljust(expected_size, b'\x00')
 
         return data, paContinue
-
-    def _signal_worker_block(self):
-        """ Helper for call_soon_threadsafe """
-        self._worker_blocked = True
-
-    def _check_worker_sleep(self):
-        if self._worker_blocked:
-            self._worker_wakeup.set()
 
     async def play(self, channels, rate, sample_width):
         """ Creates an asynchronous player and waits for it to complete """
@@ -160,7 +149,7 @@ class AWavPlayer:
 
         for i in range(wf.getnframes() // frames_per_chunk):
             self._queue.append(wf.readframes(frames_per_chunk))
-            self._check_worker_sleep()
+            self._worker_wakeup.set()
             # Instead of just waiting, mixing of incoming messages
             # could happend here. It is necessary to do the mixing
             # in the application else the OS's sound systemd will have
