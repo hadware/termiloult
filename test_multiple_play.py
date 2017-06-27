@@ -143,11 +143,15 @@ class AWavPlayer:
         framerate = wf.getframerate()
         frames_per_chunk = framerate // int(1 / self.chunk_duration)
 
+        # minimal buffering before launching the audio player
+        self._queue.append(wf.readframes(frames_per_chunk))
+        self._worker_wakeup.set()
+
         play_coro = self.play(wf.getnchannels(), framerate,
                               wf.getsampwidth())
         play_task = ensure_future(play_coro, loop=self.loop)
 
-        for i in range(wf.getnframes() // frames_per_chunk):
+        for i in range(wf.getnframes() // frames_per_chunk - 1):
             self._queue.append(wf.readframes(frames_per_chunk))
             self._worker_wakeup.set()
             # Instead of just waiting, mixing of incoming messages
