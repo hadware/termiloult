@@ -14,6 +14,7 @@ class AWavPlayer:
     # needed by the worker to compute how long is the requested data
     sample_width = 0
     # a queue to communicate between the main thread and the worker's thread
+    # will store a list of bytes, which actually are chunks of audio frames
     _queue = None
     # will the worker stop on its next call?
     _stop_next = False
