@@ -16,8 +16,9 @@ def async_callback(corofunc):
 class Prompt(urwid.Edit):
 
     @async_callback
-    def keypress(self, size, key):
+    async def keypress(self, size, key):
         if key == "enter":
+            # TODO : return the message to be sent
             self.set_edit_text("")
         else:
             super().keypress(size, key)
