@@ -1,7 +1,7 @@
 import logging
 from time import sleep
 
-from audiosink import AudioSink
+from tools.audiosink import AudioSink
 
 demo = logging.getLogger('Demo')
 

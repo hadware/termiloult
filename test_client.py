@@ -3,7 +3,7 @@ from asyncio import get_event_loop
 
 import websockets
 
-from audiosink import AudioSink
+from tools.audiosink import AudioSink
 
 
 async def client():
