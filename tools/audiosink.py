@@ -67,7 +67,10 @@ class AudioSink:
     def remove(self, owner):
         """ Stop playing all sounds in a category as soon as possible """
         with self._queue_lock:
-            del(self._queue[owner])
+            try:
+                del(self._queue[owner])
+            except IndexError:
+                pass
 
     def _worker(self, in_data, frame_count, time_info, status):
         """ Function called by PyAudio each time it can play more sound """
