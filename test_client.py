@@ -8,7 +8,7 @@ from audiosink import AudioSink
 
 async def client():
     sink = AudioSink()
-    async with websockets.connect("wss://loult.family/socket/test") as ws:
+    async with websockets.connect("wss://loult.family/socket/") as ws:
         while True:
             data = await ws.recv()
             if isinstance(data, bytes):

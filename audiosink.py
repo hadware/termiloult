@@ -45,7 +45,9 @@ class AudioSink:
 
     def add(self, sound, owner=None):
         """ Send sound data to be mixed with currently playing sounds """
-        _, data = wavfile.read(io.BytesIO(sound))
+        rate, data = wavfile.read(io.BytesIO(sound))
+        if rate != 16000:
+            self.logger.warning('Sampling rate is %s instead of 16000' % rate)
         with self._queue_lock:
             self._queue[owner].append(data)
             # In case the worker was waiting for sounds.
