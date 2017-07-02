@@ -59,6 +59,10 @@ class AudioSink:
             # Release the lock so #sink can update it.
             self._queue_lock.release()
             self._worker_wakeup.wait()
+            # If we were woken up and the queue is still empty it means
+            # we've been woken up by #close.
+            if not self._queue:
+                return b'', paComplete
             self._queue_lock.acquire()
 
         # Chunks of each sound of the size requested by portaudio
@@ -97,4 +101,5 @@ class AudioSink:
 
     def close(self):
         """ Graceful shutdown """
+        self._worker_wakeup.set()
         self.player.terminate()

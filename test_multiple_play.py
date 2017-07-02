@@ -18,3 +18,5 @@ with open("sample.wav", 'rb') as f:
 p.sink(b)
 
 sleep(25)
+
+p.close()
