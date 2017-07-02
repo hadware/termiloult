@@ -128,6 +128,9 @@ class AudioSink:
         return data.tobytes(), paContinue
 
     def close(self):
-        """ Graceful shutdown """
+        """ Graceful shutdown
+        
+        Use it if you want your application to be able to exit.
+        """
         self._worker_wakeup.set()
         self.player.terminate()
