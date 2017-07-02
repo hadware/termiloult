@@ -9,14 +9,18 @@ p = AudioSink()
 
 with open("sample.wav", 'rb') as f:
     a = f.read()
-p.sink(a)
+p.sink(a, "a")
 
 sleep(2)
 
 with open("sample.wav", 'rb') as f:
     b = f.read()
-p.sink(b)
+p.sink(b,"b")
 
-sleep(25)
+sleep(5)
+
+p.remove("a")
+
+sleep(20)
 
 p.close()

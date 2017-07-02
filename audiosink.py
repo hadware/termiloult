@@ -1,4 +1,5 @@
 from threading import Event, Lock
+from collections import defaultdict
 import logging
 import io
 
@@ -25,7 +26,7 @@ class AudioSink:
 
     def __init__(self, rate=16000):
         self.player = PyAudio()
-        self._queue = list()
+        self._queue = defaultdict(list)
         self._queue_lock = Lock()
         self._worker_wakeup = Event()
 
@@ -38,13 +39,18 @@ class AudioSink:
             stream_callback=self._worker
         )
 
-    def sink(self, sound):
+    def sink(self, sound, owner=None):
         """ Send sound data to be mixed with currently playing sounds """
         _, data = wavfile.read(io.BytesIO(sound))
         with self._queue_lock:
-            self._queue.append(data)
+            self._queue[owner].append(data)
             # In case the worker was waiting for sounds.
             self._worker_wakeup.set()
+
+    def remove(self, owner):
+        """ Stop playing all sounds in a category as soon as possible """
+        with self._queue_lock:
+            del(self._queue[owner])
 
     def _worker(self, in_data, frame_count, time_info, status):
         """ Function called by PyAudio each time it can play more sound """
@@ -71,20 +77,22 @@ class AudioSink:
         # Since we'll iterate on it, we'll avoid mutating the queue
         # and instead create a new one which will become the new queue
         # once the iteration has finished.
-        new_queue = list()
-        for sound in self._queue:
-            length = len(sound)
-            if length <= frame_count:
-                # We reached the end of a sound, so pad it if needed
-                # (as portaudio would otherwise stop working if it isn't the
-                # right size) and don't put an empty array into the new queue
-                sound = np.pad(sound, (0, frame_count - length), 'constant')
-            else:
-                # We didn't reach the end of that sound, so put what's left
-                # into the new queue.
-                new_queue.append(sound[frame_count:])
+        new_queue = defaultdict(list)
+        for owner, sounds in self._queue.items():
+            for sound in sounds:
+                length = len(sound)
+                if length <= frame_count:
+                    # We reached the end of a sound, so pad it if needed, as
+                    # portaudio would otherwise stop working if it isn't the
+                    # right size.
+                    diff = frame_count - length
+                    sound = np.pad(sound, (0, diff), 'constant')
+                else:
+                    # We didn't reach the end of that sound, so put what's left
+                    # into the new queue.
+                    new_queue[owner].append(sound[frame_count:])
 
-            chunks.append(sound[:frame_count])
+                chunks.append(sound[:frame_count])
 
         self._queue = new_queue
 
