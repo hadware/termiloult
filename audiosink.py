@@ -23,12 +23,16 @@ class AudioSink:
     _queue_lock = None
     # Synchronisation primitive to resume the worker's activity
     _worker_wakeup = None
+    _volume = 1
+    _conf_lock = None
 
-    def __init__(self, rate=16000):
+    def __init__(self, *, rate=16000, volume=100):
         self.player = PyAudio()
         self._queue = defaultdict(list)
         self._queue_lock = Lock()
         self._worker_wakeup = Event()
+        self._conf_lock = Lock()
+        self.volume = volume
 
         # This will patiently wait for sounds to be sent via #add.
         self.player.open(
@@ -46,6 +50,17 @@ class AudioSink:
             self._queue[owner].append(data)
             # In case the worker was waiting for sounds.
             self._worker_wakeup.set()
+
+    @property
+    def volume(self):
+        """ Volume in percent """
+        return 100 * self._volume
+
+    @volume.setter
+    def volume(self, value):
+        assert 0 <= value <= 100
+        with self._conf_lock:
+            self._volume = value / 100
 
     def remove(self, owner):
         """ Stop playing all sounds in a category as soon as possible """
@@ -100,7 +115,7 @@ class AudioSink:
 
         # Put all chunks into a single array and lower their volume so their 
         # sum doesn't saturate the output.
-        stack = np.stack(chunks, axis=0) // len(chunks)
+        stack = (np.stack(chunks, axis=0) // len(chunks)) * self._volume
         # Don't forget to force the int16 type else #tobytes() won't output
         # bytes with the correct format and the audio output will be garbled.
         data = np.sum(stack, axis=0, dtype=np.int16)

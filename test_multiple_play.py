@@ -21,6 +21,10 @@ sleep(5)
 
 p.remove("a")
 
-sleep(20)
+sleep(5)
+
+p.volume = 40
+
+sleep(15)
 
 p.close()
