@@ -3,6 +3,8 @@ from functools import wraps
 
 import urwid
 
+# for all pokemon names in french, the max character length is 10
+POKENAME_COLUMN_LENGTH = 11
 
 def async_callback(corofunc):
     @wraps(corofunc)
@@ -45,5 +47,5 @@ class Interface:
         return urwid_loop
 
     def add_msg(self, user_name, message):
-        self.history.widget_list.append(urwid.Columns([('fixed', 11, urwid.Text(user_name)),
+        self.history.widget_list.append(urwid.Columns([('fixed', POKENAME_COLUMN_LENGTH, urwid.Text(user_name)),
                                                       urwid.Text(message)]))

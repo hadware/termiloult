@@ -1,3 +1,5 @@
 scipy>=0.18.1
 numpy>=1.12.1
 pyaudio>=0.2.11
+websockets
+-e git+https://github.com/rndusr/urwid.git@fix_raise#egg=urwid

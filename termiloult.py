@@ -26,9 +26,6 @@ argparser.add_argument("--cookie", "-ck",
                        default="flpe",
                        type=str)
 
-# for all pokemon names in french, the max character length is 10
-POKENAME_COLUMN_LENGTH = 11
-
 
 class WebsocketClient:
 
