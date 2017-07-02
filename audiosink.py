@@ -15,7 +15,7 @@ class AudioSink:
     """
 
     player = None
-    logger = logging.getLogger('AWavPlayer')
+    logger = logging.getLogger('AudioSink')
 
     # List of sound data to be mixed and played.
     _queue = None
