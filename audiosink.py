@@ -30,7 +30,7 @@ class AudioSink:
         self._queue_lock = Lock()
         self._worker_wakeup = Event()
 
-        # This will patiently wait for sounds to be sent via #sink.
+        # This will patiently wait for sounds to be sent via #add.
         self.player.open(
             format=8,
             channels=1,
@@ -39,7 +39,7 @@ class AudioSink:
             stream_callback=self._worker
         )
 
-    def sink(self, sound, owner=None):
+    def add(self, sound, owner=None):
         """ Send sound data to be mixed with currently playing sounds """
         _, data = wavfile.read(io.BytesIO(sound))
         with self._queue_lock:
@@ -54,15 +54,15 @@ class AudioSink:
 
     def _worker(self, in_data, frame_count, time_info, status):
         """ Function called by PyAudio each time it can play more sound """
-        # The queue is also used by #sink, and since this callback runs into
+        # The queue is also used by #add, and since this callback runs into
         # a different thread, we need to lock it while we process it.
         self._queue_lock.acquire()
 
         if not self._queue:
-            # Wait until #sink has put a sound into the queue.
+            # Wait until #add has put a sound into the queue.
             self.logger.debug('Worker\'s queue is empty')
             self._worker_wakeup.clear()
-            # Release the lock so #sink can update it.
+            # Release the lock so #add can update it.
             self._queue_lock.release()
             self._worker_wakeup.wait()
             # If we were woken up and the queue is still empty it means
