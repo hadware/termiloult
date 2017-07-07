@@ -98,6 +98,9 @@ class Interface:
     def _get_input(self):
         while True:
             msg = self.textbox.edit()
+            # There's a potential race condition here if
+            # if the event loop doesn't await self.input
+            # before this is called again.
             loop.call_soon_threadsafe(self.input, msg)
 
     def _add_message(self, nickname, message):
