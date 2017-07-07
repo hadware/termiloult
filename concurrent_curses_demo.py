@@ -7,11 +7,9 @@ from typing import Tuple, List
 import argparse
 import json
 import logging
-from asyncio import get_event_loop
-import asyncio
+from asyncio import get_event_loop, gather, CancelledError
 
 import html
-from asyncio.tasks import ensure_future
 
 import websockets
 
@@ -151,15 +149,11 @@ class WebsocketClient:
             await websocket.send(message)
 
     async def _handler(self, websocket):
-        consumer_task = asyncio.ensure_future(self._consumer(websocket))
-        producer_task = asyncio.ensure_future(self._producer(websocket))
-        done, pending = await asyncio.wait(
-            [consumer_task, producer_task],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-
-        for task in pending:
-            task.cancel()
+        handlers = gather(self._consumer(websocket), self._producer(websocket))
+        try:
+            await handlers
+        except CancelledError:
+            handlers.cancel()
 
     async def listen(self):
         async with websockets.connect('wss://%s/socket/%s' % (self.server, self.channel),
