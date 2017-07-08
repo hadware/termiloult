@@ -53,8 +53,7 @@ class Interface:
     """ View object which asynchronously prints and gets messages
 
         #input: an awaitable which returns what the user has entered.
-        #add_message: a coroutine function which adds a message to be
-                displayed.
+        #output: a coroutine which sends data to be displayed.
     """
 
     def __init__(self):
