@@ -74,8 +74,6 @@ class Interface:
         # This might cause the sound system to produce logs we
         # can't control; the solution is to let them be and then
         # draw on top of them later.
-        # TODO: I get "underrun occured" debug messages from ALSA,
-        # which screws the graphics and the usability.
         self.sink = AudioSink()
 
         self.root_window = root_window

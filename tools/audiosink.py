@@ -11,7 +11,7 @@ from pyaudio import PyAudio, paContinue, paComplete
 class AudioSink:
     """ Asynchronous wav player based on portaudio
     
-    Only works for 16 bits low-endian mono wav. The rate defaults to 16000.
+    Only works for 16 bits small-endian mono wav. The rate defaults to 16000.
     """
 
     player = None
@@ -22,7 +22,6 @@ class AudioSink:
     # The queue is used to communicate between two threads, so we need a lock.
     _queue_lock = None
     # Synchronisation primitive to resume the worker's activity
-    _worker_wakeup = None
     _volume = 1
     _conf_lock = None
 
@@ -30,18 +29,12 @@ class AudioSink:
         self.player = PyAudio()
         self._queue = defaultdict(list)
         self._queue_lock = Lock()
-        self._worker_wakeup = Event()
         self._conf_lock = Lock()
         self.volume = volume
-
-        # This will patiently wait for sounds to be sent via #add.
-        self.player.open(
-            format=8,
-            channels=1,
-            rate=rate,
-            output=True,
-            stream_callback=self._worker
-        )
+        self.rate = rate
+        # Don't touch that from any other thread than
+        # the one in wich #add runs.
+        self._stream = None
 
     def add(self, sound, owner=None):
         """ Send sound data to be mixed with currently playing sounds """
@@ -50,8 +43,15 @@ class AudioSink:
             self.logger.warning('Sampling rate is %s instead of 16000' % rate)
         with self._queue_lock:
             self._queue[owner].append(data)
-            # In case the worker was waiting for sounds.
-            self._worker_wakeup.set()
+            # In case the stream was stopped.
+            if not self._stream or not self._stream.is_active():
+                self._stream = self.player.open(
+                    format=8,
+                    channels=1,
+                    rate=self.rate,
+                    output=True,
+                    stream_callback=self._worker
+                )
 
     @property
     def volume(self):
@@ -76,47 +76,36 @@ class AudioSink:
         """ Function called by PyAudio each time it can play more sound """
         # The queue is also used by #add, and since this callback runs into
         # a different thread, we need to lock it while we process it.
-        self._queue_lock.acquire()
+        with self._queue_lock:
 
-        if not self._queue:
-            # Wait until #add has put a sound into the queue.
-            self.logger.debug('Worker\'s queue is empty')
-            self._worker_wakeup.clear()
-            # Release the lock so #add can update it.
-            self._queue_lock.release()
-            self._worker_wakeup.wait()
-            self._queue_lock.acquire()
-            # If we were woken up and the queue is still empty it means
-            # we've been woken up by #close.
             if not self._queue:
+                self.logger.debug('Worker\'s queue is empty')
                 return b'', paComplete
 
-        # Chunks of each sound of the size requested by portaudio
-        # in frame_count. They'll be mixed together later.
-        chunks = list()
-        # Since we'll iterate on it, we'll avoid mutating the queue
-        # and instead create a new one which will become the new queue
-        # once the iteration has finished.
-        new_queue = defaultdict(list)
-        for owner, sounds in self._queue.items():
-            for sound in sounds:
-                length = len(sound)
-                if length <= frame_count:
-                    # We reached the end of a sound, so pad it if needed, as
-                    # portaudio would otherwise stop working if it isn't the
-                    # right size.
-                    diff = frame_count - length
-                    sound = np.pad(sound, (0, diff), 'constant')
-                else:
-                    # We didn't reach the end of that sound, so put what's left
-                    # into the new queue.
-                    new_queue[owner].append(sound[frame_count:])
+            # Chunks of each sound of the size requested by portaudio
+            # in frame_count. They'll be mixed together later.
+            chunks = list()
+            # Since we'll iterate on it, we'll avoid mutating the queue
+            # and instead create a new one which will become the new queue
+            # once the iteration has finished.
+            new_queue = defaultdict(list)
+            for owner, sounds in self._queue.items():
+                for sound in sounds:
+                    length = len(sound)
+                    if length <= frame_count:
+                        # We reached the end of a sound, so pad it if needed,
+                        # as portaudio would otherwise stop working if it isn't
+                        # the right size.
+                        diff = frame_count - length
+                        sound = np.pad(sound, (0, diff), 'constant')
+                    else:
+                        # We didn't reach the end of that sound, so put
+                        # what's left into the new queue.
+                        new_queue[owner].append(sound[frame_count:])
 
-                chunks.append(sound[:frame_count])
+                    chunks.append(sound[:frame_count])
 
-        self._queue = new_queue
-
-        self._queue_lock.release()
+            self._queue = new_queue
 
         # Put all chunks into a single array and lower their volume so their 
         # sum doesn't saturate the output.
@@ -132,5 +121,4 @@ class AudioSink:
         
         Use it if you want your application to be able to exit.
         """
-        self._worker_wakeup.set()
         self.player.terminate()
