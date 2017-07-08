@@ -1,18 +1,36 @@
-from threading import Event, Lock
-from collections import defaultdict
-import logging
 import io
+import logging
+from collections import defaultdict
+from contextlib import contextmanager
+from ctypes import CFUNCTYPE, c_char_p, c_int, cdll
+from threading import Event, Lock
 
 import numpy as np
-from scipy.io import wavfile
 from pyaudio import PyAudio, paContinue, paComplete
+from scipy import signal
+from scipy.io import wavfile
+
+ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
+
+def py_error_handler(filename, line, function, err, fmt):
+    pass
+
+c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
+
+@contextmanager
+def noalsaerr():
+    asound = cdll.LoadLibrary('libasound.so')
+    asound.snd_lib_error_set_handler(c_error_handler)
+    yield
+    asound.snd_lib_error_set_handler(None)
 
 
 class AudioSink:
     """ Asynchronous wav player based on portaudio
     
-    Only works for 16 bits small-endian mono wav. The rate defaults to 16000.
+    Only works for 16 bits little-endian mono wav. The rate defaults to 16000.
     """
+    DEFAULT_SAMPLE_RATE = 16000
 
     player = None
     logger = logging.getLogger('AudioSink')
@@ -21,26 +39,25 @@ class AudioSink:
     _queue = None
     # The queue is used to communicate between two threads, so we need a lock.
     _queue_lock = None
-    # Synchronisation primitive to resume the worker's activity
     _volume = 1
     _conf_lock = None
+    # Don't touch that from any other thread than the one in wich #add runs.
+    _stream = None
 
-    def __init__(self, *, rate=16000, volume=100):
-        self.player = PyAudio()
+    def __init__(self, *, volume=100):
+        with noalsaerr():
+            self.player = PyAudio()
         self._queue = defaultdict(list)
         self._queue_lock = Lock()
         self._conf_lock = Lock()
         self.volume = volume
-        self.rate = rate
-        # Don't touch that from any other thread than
-        # the one in wich #add runs.
-        self._stream = None
 
     def add(self, sound, owner=None):
         """ Send sound data to be mixed with currently playing sounds """
         rate, data = wavfile.read(io.BytesIO(sound))
-        if rate != 16000:
-            self.logger.warning('Sampling rate is %s instead of 16000' % rate)
+        if rate != self.DEFAULT_SAMPLE_RATE:
+            # resampling to match the 16000 mandatory rate
+            data = signal.resample(data, int(len(data) / rate * self.DEFAULT_SAMPLE_RATE))
         with self._queue_lock:
             self._queue[owner].append(data)
             # In case the stream was stopped.
@@ -48,7 +65,7 @@ class AudioSink:
                 self._stream = self.player.open(
                     format=8,
                     channels=1,
-                    rate=self.rate,
+                    rate=self.DEFAULT_SAMPLE_RATE,
                     output=True,
                     stream_callback=self._worker
                 )
@@ -75,7 +92,7 @@ class AudioSink:
     def _worker(self, in_data, frame_count, time_info, status):
         """ Function called by PyAudio each time it can play more sound """
         # The queue is also used by #add, and since this callback runs into
-        # a different thread, we need to lock it while we process it.
+        # a different thread, we need to lock the queue while we process it.
         with self._queue_lock:
 
             if not self._queue:
