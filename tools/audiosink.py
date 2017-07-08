@@ -7,6 +7,7 @@ from threading import Event, Lock
 
 import numpy as np
 from pyaudio import PyAudio, paContinue, paComplete
+from scipy import signal
 from scipy.io import wavfile
 from resampy import resample
 
@@ -55,7 +56,9 @@ class AudioSink:
     def add(self, sound, owner=None):
         """ Send sound data to be mixed with currently playing sounds """
         rate, data = wavfile.read(io.BytesIO(sound))
-        data = resample(data.astype(np.float), rate, self.DEFAULT_SAMPLE_RATE)
+        if rate != self.DEFAULT_SAMPLE_RATE:
+            data = resample(data.astype(np.float), rate,
+                            self.DEFAULT_SAMPLE_RATE)
         with self._queue_lock:
             self._queue[owner].append(data)
             # In case the stream was stopped.
