@@ -61,7 +61,7 @@ class Interface:
         # Wrapper will set up everything and clean up after a crash.
         wrapper(self._actual_init)
 
-    def _actual_init(self, root_window)
+    def _actual_init(self, root_window):
         # Curses' objects of course aren't thread-safe,
         # so we'll need a lock for every operation while
         # other threads are running.

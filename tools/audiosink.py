@@ -2,10 +2,29 @@ from threading import Event, Lock
 from collections import defaultdict
 import logging
 import io
+from ctypes import CFUNCTYPE, c_char_p, c_int, cdll
 
 import numpy as np
 from scipy.io import wavfile
 from pyaudio import PyAudio, paContinue, paComplete
+
+from ctypes import *
+from contextlib import contextmanager
+import pyaudio
+
+ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
+
+def py_error_handler(filename, line, function, err, fmt):
+    pass
+
+c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
+
+@contextmanager
+def noalsaerr():
+    asound = cdll.LoadLibrary('libasound.so')
+    asound.snd_lib_error_set_handler(c_error_handler)
+    yield
+    asound.snd_lib_error_set_handler(None)
 
 
 class AudioSink:
@@ -27,7 +46,8 @@ class AudioSink:
     _conf_lock = None
 
     def __init__(self, *, rate=16000, volume=100):
-        self.player = PyAudio()
+        with noalsaerr:
+            self.player = PyAudio()
         self._queue = defaultdict(list)
         self._queue_lock = Lock()
         self._worker_wakeup = Event()
@@ -42,6 +62,7 @@ class AudioSink:
             output=True,
             stream_callback=self._worker
         )
+
 
     def add(self, sound, owner=None):
         """ Send sound data to be mixed with currently playing sounds """
