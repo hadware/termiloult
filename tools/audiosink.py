@@ -1,17 +1,14 @@
-from threading import Event, Lock
-from collections import defaultdict
-import logging
 import io
+import logging
+from collections import defaultdict
+from contextlib import contextmanager
 from ctypes import CFUNCTYPE, c_char_p, c_int, cdll
+from threading import Event, Lock
 
 import numpy as np
+from pyaudio import PyAudio, paContinue, paComplete
 from scipy import signal
 from scipy.io import wavfile
-from pyaudio import PyAudio, paContinue, paComplete
-
-from ctypes import *
-from contextlib import contextmanager
-import pyaudio
 
 ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
 
