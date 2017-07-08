@@ -11,7 +11,7 @@ from time import sleep
 from typing import Tuple, List
 
 import websockets
-from kawaiisync import sync, Waiter
+from kawaiisync import sync, Channel
 
 from tools.audiosink import AudioSink
 from tools.interface import Interface
@@ -66,8 +66,11 @@ class Interface:
         # so we'll need a lock for every operation while
         # other threads are running.
         self.lock = Lock()
-        self.input = Waiter()
-        self.loop = get_event_loop()
+        # Those objects allow communication between threads
+        # and coroutines, as well as between coroutines.
+        self.input = Channel()
+        self.output = Channel()
+
         # This might cause the sound system to produce logs we
         # can't control; the solution is to let them be and then
         # draw on top of them later.
@@ -86,27 +89,26 @@ class Interface:
         # Draw what we just created.
         self.root_window.refresh()
 
-        # Launch the thread which will get the user's input.
-        self.input_thread = Thread(target=self._get_input)
-        self.input_thread.daemon = True
-        self.input_thread.start()
+        # Launch threads which update the interface and get the user's input
+        self._daemonize(self._get_input)
+        self._daemonize(self._add_messages)
 
-    async def add_message(self, nickname, message):
-        await self.loop.run_in_executor(None, self._add_message,
-                                        nickname, message)
+    @staticmethod
+    def _daemonize(func):
+        thread = Thread(target=func)
+        thread.daemon = True
+        thread.start()
 
     def _get_input(self):
         while True:
             msg = self.textbox.edit()
-            # There's a potential race condition here if
-            # if the event loop doesn't await self.input
-            # before this is called again.
-            loop.call_soon_threadsafe(self.input, msg)
+            self.input.send(msg)
 
-    def _add_message(self, nickname, message):
-        with self.lock:
-            self.root_window.addstr(10, 1, message)
-            self.root_window.refresh()
+    def _add_messages(self):
+        for nickname, message in self.output:
+            with self.lock:
+                self.root_window.addstr(10, 1, message)
+                self.root_window.refresh()
 
 
 class WebsocketClient:
@@ -138,7 +140,7 @@ class WebsocketClient:
                 elif msg_type == "msg":
                     msg = html.unescape(msg_data["msg"])  # removing HTML shitty encoding
                     nickname = self.user_list.name(msg_data["userid"])
-                    await self.interface.add_message(nickname, msg)
+                    await self.interface.output((nickname, msg))
 
                 elif msg_type == "connect":
                     # registering the user to the user list
