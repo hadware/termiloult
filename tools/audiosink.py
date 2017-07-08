@@ -5,6 +5,7 @@ import io
 from ctypes import CFUNCTYPE, c_char_p, c_int, cdll
 
 import numpy as np
+from scipy import signal
 from scipy.io import wavfile
 from pyaudio import PyAudio, paContinue, paComplete
 
@@ -32,6 +33,7 @@ class AudioSink:
     
     Only works for 16 bits low-endian mono wav. The rate defaults to 16000.
     """
+    DEFAULT_SAMPLE_RATE = 16000
 
     player = None
     logger = logging.getLogger('AudioSink')
@@ -67,8 +69,9 @@ class AudioSink:
     def add(self, sound, owner=None):
         """ Send sound data to be mixed with currently playing sounds """
         rate, data = wavfile.read(io.BytesIO(sound))
-        if rate != 16000:
-            self.logger.warning('Sampling rate is %s instead of 16000' % rate)
+        if rate != self.DEFAULT_SAMPLE_RATE:
+            # resampling to match the 16000 mandatory rate
+            data = signal.resample(data, len(data) / rate * self.DEFAULT_SAMPLE_RATE)
         with self._queue_lock:
             self._queue[owner].append(data)
             # In case the worker was waiting for sounds.
