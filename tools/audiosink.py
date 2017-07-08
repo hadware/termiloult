@@ -71,7 +71,7 @@ class AudioSink:
         rate, data = wavfile.read(io.BytesIO(sound))
         if rate != self.DEFAULT_SAMPLE_RATE:
             # resampling to match the 16000 mandatory rate
-            data = signal.resample(data, len(data) / rate * self.DEFAULT_SAMPLE_RATE)
+            data = signal.resample(data, int(len(data) / rate * self.DEFAULT_SAMPLE_RATE))
         with self._queue_lock:
             self._queue[owner].append(data)
             # In case the worker was waiting for sounds.
