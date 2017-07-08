@@ -7,8 +7,8 @@ from threading import Event, Lock
 
 import numpy as np
 from pyaudio import PyAudio, paContinue, paComplete
-from scipy import signal
 from scipy.io import wavfile
+from resampy import resample
 
 ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
 
@@ -56,8 +56,8 @@ class AudioSink:
         """ Send sound data to be mixed with currently playing sounds """
         rate, data = wavfile.read(io.BytesIO(sound))
         if rate != self.DEFAULT_SAMPLE_RATE:
-            # resampling to match the 16000 mandatory rate
-            data = signal.resample(data, int(len(data) / rate * self.DEFAULT_SAMPLE_RATE))
+            data = resample(data.astype(np.float), rate,
+                            self.DEFAULT_SAMPLE_RATE)
         with self._queue_lock:
             self._queue[owner].append(data)
             # In case the stream was stopped.
