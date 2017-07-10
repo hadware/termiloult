@@ -151,12 +151,7 @@ class WebsocketClient:
         self.user_list = None
         self.interface = interface
 
-    async def send_message(self, message):
-        if message is not None:
-            data = {"lang": "fr", "msg": message, "type": "msg"}
-            await self.ws.send(json.dumps(data))
-
-    async def _consumer(self) :
+    async def get_messages(self) :
         while True:
             data = await self.ws.recv()
             if isinstance(data, bytes):
@@ -181,10 +176,10 @@ class WebsocketClient:
                     # removing the user from the userlist
                     self.user_list.del_user(msg_data["userid"])
 
-    async def _producer(self):
-        while True:
-            msg = await self.interface.input
-            await self.send_message(msg)
+    async def send_messages(self):
+        async for msg in self.interface.input:
+            data = {"lang": "fr", "msg": msg, "type": "msg"}
+            await self.ws.send(json.dumps(data))
 
     @sync
     async def listen(self):
@@ -192,7 +187,7 @@ class WebsocketClient:
         extra_headers = {"cookie": "id=%s" % self.cookie}
         async with websockets.connect(url, extra_headers=extra_headers) as ws:
             self.ws = ws
-            tasks = gather(self._consumer(), self._producer())
+            tasks = gather(self.send_messages(), self.get_messages())
             try:
                 await tasks
             except CancelledError:
