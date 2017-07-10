@@ -1,7 +1,10 @@
 import argparse
 from asyncio import get_event_loop, gather, CancelledError
 from collections import deque
-from curses import wrapper, newwin
+from curses import (
+        wrapper, newwin, initscr, noecho, cbreak,
+        start_color, nocbreak, endwin, echo
+    )
 from curses.textpad import Textbox, rectangle
 from functools import wraps
 import html
@@ -10,6 +13,7 @@ import logging
 from threading import Thread, Lock
 from time import sleep
 from typing import Tuple, List
+from contextlib import closing
 
 import websockets
 from kawaiisync import sync, Channel
@@ -78,10 +82,16 @@ class Interface:
     """
 
     def __init__(self):
-        # Wrapper will set up everything and clean up after a crash.
-        wrapper(self._actual_init)
+        # Set up the terminal
+        self.root_window = initscr()
+        noecho()
+        cbreak()
+        self.root_window.keypad(1)
+        try:
+            start_color()
+        except:
+            pass
 
-    def _actual_init(self, root_window):
         # Curses' objects of course aren't thread-safe,
         # so we'll need a lock for every operation while
         # other threads are running.
@@ -98,9 +108,7 @@ class Interface:
         # draw on top of them later.
         self.sink = AudioSink()
 
-        self.root_window = root_window
         self.root_window.clear()
-
         # A box to input things.
         self.input_window = newwin(1, 110, 1, 1)
         rectangle(self.root_window, 0, 0, 2, 111)
@@ -112,6 +120,13 @@ class Interface:
         # Launch threads which update the interface and get the user's input
         self.get_input()
         self.add_messages()
+
+    def close(self):
+        """ Change the terminal back to normal """
+        self.root_window.keypad(1)
+        echo()
+        nocbreak()
+        endwin()
 
     @daemon_thread
     def get_input(self):
@@ -186,7 +201,7 @@ class WebsocketClient:
 if __name__ == "__main__":
     # parsing cmd line arguments
     args = argparser.parse_args()
-    interface = Interface()
-    ws_client = WebsocketClient(args.server, args.channel,
-                                args.cookie, interface)
-    ws_client.listen()
+    with closing(Interface()) as interface:
+        ws_client = WebsocketClient(args.server, args.channel,
+                                    args.cookie, interface)
+        ws_client.listen()
