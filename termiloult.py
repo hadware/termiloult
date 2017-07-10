@@ -3,6 +3,7 @@ from asyncio import get_event_loop, gather, CancelledError
 from collections import deque
 from curses import wrapper, newwin
 from curses.textpad import Textbox, rectangle
+from functools import wraps
 import html
 import json
 import logging
@@ -49,6 +50,26 @@ argparser.add_argument("--cookie", "-ck",
 #        at the bottom of it"""
 #        pass
 
+
+def daemon_thread(method):
+    """ Make a method launch itself into a daemon tread on invocation
+
+    If the object has a "threads" property which is a list, then every
+    new thread will be appended to it.
+    """
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+
+        thread = Thread(target=method, args=(self, *args), kwargs=kwargs)
+        thread.daemon = True
+        thread.start()
+
+        if isinstance(self.threads, list):
+            self.threads.append(thread)
+
+    return wrapped
+
+
 class Interface:
     """ View object which asynchronously prints and gets messages
 
@@ -70,6 +91,8 @@ class Interface:
         self.input = Channel()
         self.output = Channel()
 
+        self.threads = list()
+
         # This might cause the sound system to produce logs we
         # can't control; the solution is to let them be and then
         # draw on top of them later.
@@ -87,21 +110,17 @@ class Interface:
         self.root_window.refresh()
 
         # Launch threads which update the interface and get the user's input
-        self._daemonize(self._get_input)
-        self._daemonize(self._add_messages)
+        self.get_input()
+        self.add_messages()
 
-    @staticmethod
-    def _daemonize(func):
-        thread = Thread(target=func)
-        thread.daemon = True
-        thread.start()
-
-    def _get_input(self):
+    @daemon_thread
+    def get_input(self):
         while True:
             msg = self.textbox.edit()
             self.input.send(msg)
 
-    def _add_messages(self):
+    @daemon_thread
+    def add_messages(self):
         for nickname, message in self.output:
             with self.lock:
                 self.root_window.addstr(10, 1, message)
