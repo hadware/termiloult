@@ -60,6 +60,8 @@ def daemon_thread(method):
 
     If the object has a "threads" property which is a list, then every
     new thread will be appended to it.
+
+    Return the thread object that was created.
     """
     @wraps(method)
     def wrapped(self, *args, **kwargs):
@@ -68,8 +70,10 @@ def daemon_thread(method):
         thread.daemon = True
         thread.start()
 
-        if isinstance(self.threads, list):
+        if hasattr(self, "threads") and isinstance(self.threads, list):
             self.threads.append(thread)
+
+        return thread
 
     return wrapped
 
