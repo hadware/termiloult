@@ -112,7 +112,6 @@ class Interface:
         # draw on top of them later.
         self.sink = AudioSink()
 
-        self.root_window.clear()
         # A box to input things.
         self.input_window = newwin(1, 110, 1, 1)
         rectangle(self.root_window, 0, 0, 2, 111)
@@ -137,6 +136,7 @@ class Interface:
         while True:
             msg = self.textbox.edit()
             self.input.send(msg)
+            self.input_window.clear()
 
     @daemon_thread
     def add_messages(self):
