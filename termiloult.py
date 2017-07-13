@@ -3,7 +3,7 @@ from asyncio import get_event_loop, gather, CancelledError
 from collections import deque
 from curses import (
         wrapper, newwin, initscr, noecho, cbreak,
-        start_color, nocbreak, endwin, echo
+        start_color, nocbreak, endwin, echo, setsyx
     )
 from curses.textpad import Textbox, rectangle
 from functools import wraps
@@ -90,7 +90,7 @@ class Interface:
         self.root_window = initscr()
         noecho()
         cbreak()
-        self.root_window.keypad(1)
+        self.root_window.keypad(True)
         try:
             start_color()
         except:
@@ -112,14 +112,18 @@ class Interface:
         # draw on top of them later.
         self.sink = AudioSink()
 
+        max_y, max_x = self.root_window.getmaxyx()
+        self.max = (max_y, max_x)
+
         # A box to input things.
-        self.input_window = newwin(1, 110, 1, 1)
-        rectangle(self.root_window, 0, 0, 2, 111)
+        # TODO: parametrize the hard-coded values.
+        self.input_window = newwin(1, max_x - 2, max_y - 3, 1)
+        rectangle(self.root_window, max_y - 4, 0, max_y - 2, max_x - 1)
         self.textbox = Textbox(self.input_window)
 
         # A box where to draw received messages.
-        self.output_window = newwin(*self.root_window.getmaxyx(), 4, 1)
-        self.output_window.scrollok(1)
+        self.output_window = newwin(max_y - 5, max_x - 2, 0, 1)
+        self.output_window.scrollok(True)
 
         # Draw what we just created.
         self.root_window.refresh()
@@ -130,7 +134,7 @@ class Interface:
 
     def close(self):
         """ Change the terminal back to normal """
-        self.root_window.keypad(1)
+        self.root_window.keypad(False)
         echo()
         nocbreak()
         endwin()
@@ -144,11 +148,12 @@ class Interface:
 
     @daemon_thread
     def add_messages(self):
+        window = self.output_window
+        max_y, max_x = self.max
         for nickname, message in self.output:
-            with self.lock:
-                # self.output_window.scroll()
-                self.output_window.addstr(nickname + " : " + message + "\n" )
-                self.output_window.refresh()
+            window.scroll()
+            window.addstr(max_y - 6, 0, nickname + " : " + message)
+            window.refresh()
 
 
 class WebsocketClient:
