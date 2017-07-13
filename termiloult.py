@@ -1,22 +1,22 @@
 import argparse
-from asyncio import get_event_loop, gather, CancelledError
-from collections import deque
-from curses import (
-        wrapper, newwin, initscr, noecho, cbreak,
-        start_color, nocbreak, endwin, echo, setsyx
-    )
-from curses.textpad import Textbox, rectangle
-from functools import wraps
 import html
 import json
 import logging
-from threading import Thread, Lock
-from time import sleep
-from typing import Tuple, List
+from asyncio import gather, CancelledError
 from contextlib import closing
+from curses import (
+    newwin, initscr, noecho, cbreak,
+    nocbreak, endwin, echo
+)
+from curses import start_color
+from curses.textpad import Textbox, rectangle
+from functools import wraps
+from os.path import isfile
+from threading import Thread, Lock
 
 import websockets
 from kawaiisync import sync, Channel
+from yaml import load
 
 from tools.audiosink import AudioSink
 from tools.interface import Interface
@@ -35,24 +35,10 @@ argparser.add_argument("--cookie", "-ck",
                        help="Sets the user cookie",
                        default="flpe",
                        type=str)
-
-
-#class MessageLog:
-#    """Widget that handles the message list"""
-#
-#    def __init__(self, height, width, x_offset = 0, y_offset = 0):
-#        self.root_window = newwin(height, width)
-#        self.dimensions = (height, width)
-#        self.offsets = (x_offset, y_offset)
-#        self.message_log = []  # type: List[Tuple[str,str]]
-#
-#    def _refresh(self):
-#        self.root_window.refresh()
-#
-#    def add_message(self, username, message):
-#        """Adds a message to the log, redraws the full message list to add that message
-#        at the bottom of it"""
-#        pass
+argparser.add_argument("--config", "-g",
+                      help="A yaml file containing a either a cookie, a channel and/or a server domain",
+                      default="config.yaml",
+                      type=str)
 
 
 def daemon_thread(method):
@@ -88,6 +74,7 @@ class Interface:
     def __init__(self):
         # Set up the terminal
         self.root_window = initscr()
+        start_color()
         noecho()
         cbreak()
         self.root_window.keypad(True)
@@ -210,7 +197,20 @@ class WebsocketClient:
 if __name__ == "__main__":
     # parsing cmd line arguments
     args = argparser.parse_args()
+    config_dict = {"channel" : args.channel,
+                   "cookie" : args.cookie,
+                   "server" : args.server}
+    # loading values from the potential yaml config as "safely" as possible,
+    # meaning, only if the config file is here and if the key exists, otherwise,
+    # leaving the values from the command line untouched
+    if isfile(args.config):
+        with open(args.config) as yaml_config:
+            yaml_config = load(yaml_config)
+            for key in config_dict.keys():
+                if key in yaml_config:
+                    config_dict[key] = yaml_config[key]
+
     with closing(Interface()) as interface:
-        ws_client = WebsocketClient(args.server, args.channel,
-                                    args.cookie, interface)
+        ws_client = WebsocketClient(config_dict["server"], config_dict["channel"],
+                                    config_dict["cookie"], interface)
         ws_client.listen()

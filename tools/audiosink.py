@@ -57,8 +57,11 @@ class AudioSink:
         """ Send sound data to be mixed with currently playing sounds """
         rate, data = wavfile.read(io.BytesIO(sound))
         if rate != self.DEFAULT_SAMPLE_RATE:
-            data = resample(data.astype(np.float), rate,
+            try:
+                data = resample(data.astype(np.float), rate,
                             self.DEFAULT_SAMPLE_RATE)
+            except ValueError: # sometimes happen when flooding with small wav files
+                return
         with self._queue_lock:
             self._queue[owner].append(data)
 
