@@ -117,6 +117,10 @@ class Interface:
         rectangle(self.root_window, 0, 0, 2, 111)
         self.textbox = Textbox(self.input_window)
 
+        # A box where to draw received messages.
+        self.output_window = newwin(*self.root_window.getmaxyx(), 4, 1)
+        self.output_window.scrollok(1)
+
         # Draw what we just created.
         self.root_window.refresh()
 
@@ -142,8 +146,9 @@ class Interface:
     def add_messages(self):
         for nickname, message in self.output:
             with self.lock:
-                self.root_window.addstr(10, 1, message)
-                self.root_window.refresh()
+                # self.output_window.scroll()
+                self.output_window.addstr(nickname + " : " + message + "\n" )
+                self.output_window.refresh()
 
 
 class WebsocketClient:
