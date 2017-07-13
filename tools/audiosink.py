@@ -61,15 +61,19 @@ class AudioSink:
                             self.DEFAULT_SAMPLE_RATE)
         with self._queue_lock:
             self._queue[owner].append(data)
-            # In case the stream was stopped.
-            if not self._stream or not self._stream.is_active():
-                self._stream = self.player.open(
-                    format=8,
-                    channels=1,
-                    rate=self.DEFAULT_SAMPLE_RATE,
-                    output=True,
-                    stream_callback=self._worker
-                )
+
+        if self._stream and not self._stream.is_active():
+            self._stream.close()
+            self._stream = None
+
+        if not self._stream:
+            self._stream = self.player.open(
+                format=8,
+                channels=1,
+                rate=self.DEFAULT_SAMPLE_RATE,
+                output=True,
+                stream_callback=self._worker
+            )
 
     @property
     def volume(self):
