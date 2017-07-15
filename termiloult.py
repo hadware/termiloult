@@ -2,6 +2,7 @@ import argparse
 import html
 import json
 import logging
+from _curses import color_pair, init_pair
 from asyncio import gather, CancelledError
 from contextlib import closing
 from curses import (
@@ -9,8 +10,11 @@ from curses import (
     nocbreak, endwin, echo
 )
 from curses import start_color
+import curses
+import locale
 from curses.textpad import Textbox, rectangle
 from functools import wraps
+from itertools import product
 from os.path import isfile
 from threading import Thread, Lock
 
@@ -77,6 +81,8 @@ class Interface:
         start_color()
         noecho()
         cbreak()
+        self._init_color_pairs()
+        locale.setlocale(locale.LC_ALL, '')
         self.root_window.keypad(True)
         try:
             start_color()
@@ -119,6 +125,13 @@ class Interface:
         self.get_input()
         self.add_messages()
 
+    def _init_color_pairs(self):
+        counter = 0
+        for color_front, color_back in product(range(0, 8), range(0, 8)):
+            if color_front != color_back :
+                counter += 1
+                init_pair(counter, color_front, color_back)
+
     def close(self):
         """ Change the terminal back to normal """
         self.root_window.keypad(False)
@@ -137,9 +150,9 @@ class Interface:
     def add_messages(self):
         window = self.output_window
         max_y, max_x = self.max
-        for nickname, message in self.output:
+        for nickname, message, color_pair_code in self.output:
             window.scroll()
-            window.addstr(max_y - 6, 0, nickname + " : " + message)
+            window.addstr(max_y - 6, 0, nickname + " : " + message, color_pair(color_pair_code))
             window.refresh()
 
 
@@ -167,7 +180,8 @@ class WebsocketClient:
                 elif msg_type == "msg":
                     msg = html.unescape(msg_data["msg"])  # removing HTML shitty encoding
                     nickname = self.user_list.name(msg_data["userid"])
-                    await self.interface.output((nickname, msg))
+                    color_code = self.user_list.color(msg_data["userid"])
+                    await self.interface.output((nickname, msg, color_code))
 
                 elif msg_type == "connect":
                     # registering the user to the user list

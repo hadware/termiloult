@@ -1,5 +1,6 @@
 class UserList:
     """Wrapper around the 'currently connected users' dictionary"""
+    COLOR_COUNT = 56
 
     def __init__(self, userlist_data):
         self.users = {user_data["userid"]: user_data for user_data in userlist_data}
@@ -18,6 +19,9 @@ class UserList:
 
     def name(self, user_id):
         return self.users[user_id]["params"]["name"]
+
+    def color(self, user_id):
+        return int(user_id, 16) % 56 + 1
 
     def itsme(self, user_id):
         return self.my_id == user_id
