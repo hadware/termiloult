@@ -23,7 +23,6 @@ from kawaiisync import sync, Channel
 from yaml import load
 
 from tools.audiosink import AudioSink
-from tools.interface import Interface
 from tools.userlist import UserList
 
 argparser = argparse.ArgumentParser()
