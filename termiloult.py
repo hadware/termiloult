@@ -23,7 +23,6 @@ from kawaiisync import sync, Channel
 from yaml import load
 
 from tools.audiosink import AudioSink
-from tools.interface import Interface
 from tools.userlist import UserList
 
 argparser = argparse.ArgumentParser()
@@ -184,18 +183,18 @@ class WebsocketClient:
                     msg = html.unescape(msg_data["msg"])  # removing HTML shitty encoding
                     nickname = self.user_list.name(msg_data["userid"])
                     color_code = self.user_list.color(msg_data["userid"])
-                    await self.interface.output((nickname, msg, color_code, False))
+                    await self.interface.output(nickname, msg, color_code, False)
 
                 elif msg_type == "connect":
                     # registering the user to the user list
                     self.user_list.add_user(msg_data["userid"], msg_data["params"])
                     msg = "Un %s sauvage est apparu!" % self.user_list.name(msg_data["userid"])
-                    await self.interface.output((None, msg, None, True))
+                    await self.interface.output(None, msg, None, True)
 
                 elif msg_type == "disconnect":
                     # removing the user from the userlist
                     msg = "Le %s sauvage s'est enfui!" % self.user_list.name(msg_data["userid"])
-                    await self.interface.output((None, msg, None, True))
+                    await self.interface.output(None, msg, None, True)
                     self.user_list.del_user(msg_data["userid"])
 
     async def send_messages(self):
