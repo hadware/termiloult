@@ -2,6 +2,7 @@ import argparse
 import html
 import json
 import logging
+from re import search
 from _curses import color_pair, init_pair
 from asyncio import gather, CancelledError
 from contextlib import closing
@@ -34,11 +35,15 @@ argparser.add_argument("--server", "-s",
                        help="Server on which to connect. Defaults to the 'Official' channel, loult.family",
                        default="loult.family",
                        type=str)
+argparser.add_argument("--port", "-p",
+                       help="Port of the websocket server",
+                       default="80",
+                       type=int)
 argparser.add_argument("--cookie", "-ck",
                        help="Sets the user cookie",
                        default="flpe",
                        type=str)
-argparser.add_argument("--config", "-g",
+argparser.add_argument("--config", "-cf",
                       help="A yaml file containing a either a cookie, a channel and/or a server domain",
                       default="config.yaml",
                       type=str)
@@ -160,11 +165,12 @@ class Interface:
 
 class WebsocketClient:
 
-    def __init__(self, server : str, channel : str, cookie : str, interface : Interface):
+    def __init__(self, server : str, channel : str, port : int, cookie : str, interface : Interface):
         self.server = server
         self.channel = channel
+        self.port = port
         self.cookie = cookie
-        self.user_list = None
+        self.user_list = None # type:UserList
         self.interface = interface
 
     async def get_messages(self) :
@@ -199,12 +205,38 @@ class WebsocketClient:
 
     async def send_messages(self):
         async for msg in self.interface.input:
-            data = {"lang": "fr", "msg": msg, "type": "msg"}
+
+            if msg.startswith("/attack"):
+                msg_split = msg.split()
+                data = {"type": "attack", "target": msg[1],
+                        "order": msg_split[2] if len(msg_split) >= 3 else None}
+
+            elif msg.startswith("/ban") or msg.startswith("/slowban"):
+                # typical example is /slowban apply Taupiqueur 1 2j
+                msg_split = msg.split()
+                if len(msg_split) >= 4 and search('^(\d+d)?(\d+h)?(\d+m)?(\d+s)?$', msg_split[-1]):
+                    timeout = msg_split[-1]
+                    if len(msg_split) == 4: # it means order hasn't been specified
+                        order = 1
+                    else:
+                        order = msg_split[3]
+                else:
+                    timeout = "0s" # default timeout
+                    order = msg_split[3]
+
+                data = {"type": msg_split[0].strip("/"),
+                        "state": msg_split[1],
+                        "userid": self.user_list.get_userid_from_name(msg_split[2], int(order) - 1),
+                        "timeout": timeout}
+
+            else:
+                data = {"lang": "fr", "msg": msg, "type": "msg"}
+
             await self.ws.send(json.dumps(data))
 
     @sync
     async def listen(self):
-        url = 'wss://%s/socket/%s' % (self.server, self.channel)
+        url = 'wss://%s:%i/socket/%s' % (self.server, self.port, self.channel)
         extra_headers = {"cookie": "id=%s" % self.cookie}
         async with websockets.connect(url, extra_headers=extra_headers) as ws:
             self.ws = ws
@@ -218,6 +250,7 @@ if __name__ == "__main__":
     # parsing cmd line arguments
     args = argparser.parse_args()
     config_dict = {"channel" : args.channel,
+                   "post" : args.port,
                    "cookie" : args.cookie,
                    "server" : args.server}
     # loading values from the potential yaml config as "safely" as possible,
