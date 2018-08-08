@@ -4,8 +4,8 @@ import json
 import logging
 from re import search
 from _curses import color_pair, init_pair
-from asyncio import gather, CancelledError
-from contextlib import closing
+from asyncio import gather, CancelledError, get_event_loop
+from contextlib import closing, suppress
 from curses import (
     newwin, initscr, noecho, cbreak,
     nocbreak, endwin, echo
@@ -20,7 +20,7 @@ from os.path import isfile
 from threading import Thread, Lock
 
 import websockets
-from kawaiisync import sync, Channel
+from janus import Queue
 from yaml import load
 
 from tools.audiosink import AudioSink
@@ -99,8 +99,8 @@ class Interface:
         self.lock = Lock()
         # Those objects allow communication between threads
         # and coroutines, as well as between coroutines.
-        self.input = Channel()
-        self.output = Channel()
+        self.input = Queue()
+        self.output = Queue()
 
         self.threads = list()
 
@@ -147,14 +147,21 @@ class Interface:
     def get_input(self):
         while True:
             msg = self.textbox.edit()
-            self.input.send(msg)
+            self.input.sync_q.put(msg)
             self.input_window.clear()
 
     @daemon_thread
     def add_messages(self):
         window = self.output_window
         max_y, max_x = self.max
-        for nickname, message, color_pair_code, is_info in self.output:
+        while True:
+            msg = self.output.sync_q.get()
+
+            self.output.sync_q.task_done()
+            if msg is None:
+                break
+
+            (nickname, message, color_pair_code, is_info) = msg
             window.scroll()
             if is_info:
                 window.addstr(max_y - 6, 0, message)
@@ -189,22 +196,27 @@ class WebsocketClient:
                     msg = html.unescape(msg_data["msg"])  # removing HTML shitty encoding
                     nickname = self.user_list.name(msg_data["userid"])
                     color_code = self.user_list.color(msg_data["userid"])
-                    await self.interface.output(nickname, msg, color_code, False)
+                    await self.interface.async_q.put((nickname, msg, color_code, False))
 
                 elif msg_type == "connect":
                     # registering the user to the user list
                     self.user_list.add_user(msg_data["userid"], msg_data["params"])
                     msg = "Un %s sauvage est apparu!" % self.user_list.name(msg_data["userid"])
-                    await self.interface.output(None, msg, None, True)
+                    await self.interface.async_q.put((None, msg, None, True))
 
                 elif msg_type == "disconnect":
                     # removing the user from the userlist
                     msg = "Le %s sauvage s'est enfui!" % self.user_list.name(msg_data["userid"])
-                    await self.interface.output(None, msg, None, True)
+                    await self.interface.async_q.put((None, msg, None, True))
                     self.user_list.del_user(msg_data["userid"])
 
     async def send_messages(self):
-        async for msg in self.interface.input:
+        while True:
+            msg = await self.interface.input.async_q.get()
+
+            self.interface.input.async_q.task_done()
+            if msg is None:
+                return
 
             if msg.startswith("/attack"):
                 msg_split = msg.split()
@@ -234,7 +246,6 @@ class WebsocketClient:
 
             await self.ws.send(json.dumps(data))
 
-    @sync
     async def listen(self):
         url = 'wss://%s:%i/socket/%s' % (self.server, self.port, self.channel)
         extra_headers = {"cookie": "id=%s" % self.cookie}
@@ -263,7 +274,10 @@ if __name__ == "__main__":
                 if key in yaml_config:
                     config_dict[key] = yaml_config[key]
 
-    with closing(Interface()) as interface:
-        ws_client = WebsocketClient(config_dict["server"], config_dict["channel"],
-                                    config_dict["cookie"], interface)
-        ws_client.listen()
+        with closing(Interface()) as interface:
+            ws_client = WebsocketClient(config_dict["server"], config_dict["channel"],
+                                        config_dict["cookie"], interface)
+
+            loop = get_event_loop()
+            with suppress(KeyboardInterrupt):
+                loop.run_until_complete(ws_client.listen())

@@ -1,7 +1,7 @@
 scipy>=0.18.1
 numpy>=1.12.1
-pyaudio>=0.2.11
+pyaudio
 websockets>=3.3
-kawaiisync>=0.5.0
+janus>=0.3.0
 resampy>=0.1.5
 PyYAML
