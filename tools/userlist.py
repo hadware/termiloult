@@ -30,7 +30,8 @@ class UserList:
     def my_name(self):
         return self.name(self.my_id)
 
-    def get_userid_from_name(self, pokemon_name: str, order=0) -> (int, User):
+    #def get_userid_from_name(self, pokemon_name: str, order=0) -> (int, User):
+    def get_userid_from_name(self, pokemon_name: str, order=0):
 
         for user_id, user_data in self.users.items():
             if user_data["params"]["name"].lower() == pokemon_name.lower():

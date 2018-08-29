@@ -184,7 +184,8 @@ class WebsocketClient:
         while True:
             data = await self.ws.recv()
             if isinstance(data, bytes):
-                self.interface.sink.add(data)
+                #self.interface.sink.add(data)
+                pass
             else:
                 msg_data = json.loads(data, encoding="utf-8")
                 msg_type = msg_data["type"]
@@ -196,18 +197,18 @@ class WebsocketClient:
                     msg = html.unescape(msg_data["msg"])  # removing HTML shitty encoding
                     nickname = self.user_list.name(msg_data["userid"])
                     color_code = self.user_list.color(msg_data["userid"])
-                    await self.interface.async_q.put((nickname, msg, color_code, False))
+                    await self.interface.output.async_q.put((nickname, msg, color_code, False))
 
                 elif msg_type == "connect":
                     # registering the user to the user list
                     self.user_list.add_user(msg_data["userid"], msg_data["params"])
                     msg = "Un %s sauvage est apparu!" % self.user_list.name(msg_data["userid"])
-                    await self.interface.async_q.put((None, msg, None, True))
+                    await self.interface.output.async_q.put((None, msg, None, True))
 
                 elif msg_type == "disconnect":
                     # removing the user from the userlist
                     msg = "Le %s sauvage s'est enfui!" % self.user_list.name(msg_data["userid"])
-                    await self.interface.async_q.put((None, msg, None, True))
+                    await self.interface.output.async_q.put((None, msg, None, True))
                     self.user_list.del_user(msg_data["userid"])
 
     async def send_messages(self):
@@ -263,7 +264,8 @@ if __name__ == "__main__":
     config_dict = {"channel" : args.channel,
                    "post" : args.port,
                    "cookie" : args.cookie,
-                   "server" : args.server}
+                   "server" : args.server,
+                   "port" : args.port}
     # loading values from the potential yaml config as "safely" as possible,
     # meaning, only if the config file is here and if the key exists, otherwise,
     # leaving the values from the command line untouched
@@ -275,8 +277,11 @@ if __name__ == "__main__":
                     config_dict[key] = yaml_config[key]
 
         with closing(Interface()) as interface:
-            ws_client = WebsocketClient(config_dict["server"], config_dict["channel"],
-                                        config_dict["cookie"], interface)
+            ws_client = WebsocketClient(config_dict["server"], 
+                                        config_dict["channel"],
+                                        config_dict["port"],
+                                        config_dict["cookie"], 
+                                        interface)
 
             loop = get_event_loop()
             with suppress(KeyboardInterrupt):
